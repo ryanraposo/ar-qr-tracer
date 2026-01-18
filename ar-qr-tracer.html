@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AR Physical QR Tracer</title>
+  <style>
+    body, html { margin: 0; padding: 0; overflow: hidden; height: 100%; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.module.js';
+import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.152.0/examples/jsm/webxr/ARButton.js';
+
+let camera, scene, renderer, controller;
+let qrPlane;
+
+init();
+animate();
+
+function init() {
+  // Renderer
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true;
+  document.body.appendChild(renderer.domElement);
+
+  // AR Button
+  document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+
+  // Scene & Camera
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+  scene.add(camera);
+
+  // Light
+  const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+  scene.add(light);
+
+  // QR texture
+  const qrTexture = new THREE.TextureLoader().load('https://upload.wikimedia.org/wikipedia/commons/2/2f/QR_code_for_mobile_English_Wikipedia.png');
+  const qrMaterial = new THREE.MeshBasicMaterial({ map: qrTexture, transparent: true });
+  qrPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), qrMaterial);
+  qrPlane.visible = false;
+  scene.add(qrPlane);
+
+  // Controller for tap placement
+  controller = renderer.xr.getController(0);
+  controller.addEventListener('select', onSelect);
+  scene.add(controller);
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+
+// Place QR on a real-world surface
+function onSelect() {
+  const session = renderer.xr.getSession();
+  const viewerSpace = renderer.xr.getReferenceSpace();
+  session.requestReferenceSpace('viewer').then((refSpace) => {
+    session.requestHitTestSource({ space: refSpace }).then((hitTestSource) => {
+      renderer.xr.setAnimationLoop(() => {
+        const frame = renderer.xr.getFrame();
+        const hitTestResults = frame.getHitTestResults(hitTestSource);
+        if (hitTestResults.length > 0) {
+          const hit = hitTestResults[0];
+          const pose = hit.getPose(renderer.xr.getReferenceSpace());
+          qrPlane.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+          qrPlane.quaternion.set(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w);
+          qrPlane.visible = true;
+        }
+      });
+    });
+  });
+}
+
+function animate() {
+  renderer.setAnimationLoop(() => {
+    renderer.render(scene, camera);
+  });
+}
+</script>
+</body>
+</html>
