@@ -58,8 +58,8 @@
   embedded
   arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false;">
 
-  <!-- Kanji marker -->
-  <a-marker preset="kanji" emitevents="true">
+  <!-- Custom marker -->
+  <a-marker type="pattern" url="pattern-marker.patt" emitevents="true">
     <!-- Semi-transparent QR plane above marker -->
     <a-plane
       id="qrPlane"
@@ -77,7 +77,10 @@
 </a-scene>
 
 <a-assets>
+  <!-- QR texture placeholder -->
   <img id="qrTexture" src="https://upload.wikimedia.org/wikipedia/commons/2/2f/QR_code_for_mobile_English_Wikipedia.png">
+  <!-- Optional: reference image for testing -->
+  <img id="markerImage" src="pattern-marker.png">
 </a-assets>
 
 <script>
