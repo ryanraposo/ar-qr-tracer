@@ -2,95 +2,142 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AR Physical QR Tracer</title>
+  <title>ar-qr-tracer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
+
   <style>
-    body, html { margin: 0; padding: 0; overflow: hidden; height: 100%; }
-    canvas { display: block; }
+    body { margin: 0; overflow: hidden; font-family: sans-serif; }
+
+    /* Instructions box */
+    #instructions {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 12px;
+      z-index: 10;
+      text-align: center;
+      max-width: 90%;
+      line-height: 1.4;
+    }
+
+    /* File input */
+    #fileInput {
+      position: absolute;
+      top: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+
+    #fileInput::-webkit-file-upload-button {
+      padding: 8px 12px;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
-<script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.module.js';
-import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.152.0/examples/jsm/webxr/ARButton.js';
+<div id="instructions">
+  Draw or place a Kanji marker on the wall. <br>
+  Point your camera at it to place the QR overlay. <br>
+  Use the button below to load your QR image. <br>
+  Pinch to scale the QR plane if needed.
+</div>
 
-let camera, scene, renderer, controller;
-let qrPlane;
+<input type="file" id="fileInput" accept="image/*">
 
-init();
-animate();
+<a-scene
+  embedded
+  arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false;">
 
-function init() {
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.xr.enabled = true;
-  document.body.appendChild(renderer.domElement);
+  <!-- Kanji marker -->
+  <a-marker preset="kanji" emitevents="true">
+    <!-- Semi-transparent QR plane above marker -->
+    <a-plane
+      id="qrPlane"
+      opacity="0.35"
+      material="transparent: true; side: double"
+      position="0 0.6 0"
+      rotation="-90 0 0"
+      height="1"
+      width="1"
+      pinch-scale>
+    </a-plane>
+  </a-marker>
 
-  // WebXR detection for Safari
-  if (navigator.xr) {
-    navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
-      if (!supported) {
-        alert('WebXR AR not supported/enabled in Safari. Enable Experimental Features → WebXR.');
-      }
-    });
-  } else {
-    alert('WebXR not detected. Make sure you are on iOS 17+ Safari.');
+  <a-entity camera></a-entity>
+</a-scene>
+
+<a-assets>
+  <img id="qrTexture" src="https://upload.wikimedia.org/wikipedia/commons/2/2f/QR_code_for_mobile_English_Wikipedia.png">
+</a-assets>
+
+<script>
+/* Dynamic QR loader */
+const fileInput = document.getElementById('fileInput');
+const qrPlane = document.getElementById('qrPlane');
+
+fileInput.addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const dataURL = e.target.result;
+    qrPlane.setAttribute('material', `src: url(${dataURL}); transparent: true; opacity: 0.35; side: double;`);
   }
+  reader.readAsDataURL(file);
+});
 
-  // AR Button for starting session
-  document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+/* Pinch-to-scale component */
+AFRAME.registerComponent('pinch-scale', {
+  init: function() {
+    const el = this.el;
+    let initialDistance = null;
+    let initialScale = el.object3D.scale.clone();
 
-  // Scene
-  scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 20);
-  scene.add(camera);
+    function getDistance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx*dx + dy*dy);
+    }
 
-  // Light
-  const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-  scene.add(light);
+    function touchStart(e) {
+      if (e.touches.length === 2) {
+        initialDistance = getDistance(e.touches);
+        initialScale = el.object3D.scale.clone();
+      }
+    }
 
-  // QR plane
-  const qrTexture = new THREE.TextureLoader().load('https://upload.wikimedia.org/wikipedia/commons/2/2f/QR_code_for_mobile_English_Wikipedia.png');
-  const qrMaterial = new THREE.MeshBasicMaterial({ map: qrTexture, transparent: true, opacity: 0.5 });
-  qrPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), qrMaterial);
-  qrPlane.visible = false;
-  scene.add(qrPlane);
+    function touchMove(e) {
+      if (e.touches.length === 2 && initialDistance) {
+        const currentDistance = getDistance(e.touches);
+        const scaleFactor = currentDistance / initialDistance;
+        el.object3D.scale.set(
+          initialScale.x * scaleFactor,
+          initialScale.y * scaleFactor,
+          initialScale.z * scaleFactor
+        );
+      }
+    }
 
-  // Controller for tap placement
-  controller = renderer.xr.getController(0);
-  controller.addEventListener('select', onSelect);
-  scene.add(controller);
+    function touchEnd(e) {
+      if (e.touches.length < 2) initialDistance = null;
+    }
 
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth/window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-}
-
-// Place QR on surface
-function onSelect() {
-  const session = renderer.xr.getSession();
-  session.requestReferenceSpace('viewer').then((refSpace) => {
-    session.requestHitTestSource({ space: refSpace }).then((hitTestSource) => {
-      renderer.xr.setAnimationLoop(() => {
-        const frame = renderer.xr.getFrame();
-        const hitResults = frame.getHitTestResults(hitTestSource);
-        if (hitResults.length > 0) {
-          const hit = hitResults[0];
-          const pose = hit.getPose(renderer.xr.getReferenceSpace());
-          qrPlane.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
-          qrPlane.quaternion.set(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w);
-          qrPlane.visible = true;
-        }
-      });
-    });
-  });
-}
-
-function animate() {
-  renderer.setAnimationLoop(() => renderer.render(scene, camera));
-}
+    el.sceneEl.canvas.addEventListener('touchstart', touchStart, false);
+    el.sceneEl.canvas.addEventListener('touchmove', touchMove, false);
+    el.sceneEl.canvas.addEventListener('touchend', touchEnd, false);
+  }
+});
 </script>
 </body>
 </html>
