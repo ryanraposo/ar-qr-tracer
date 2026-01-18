@@ -1,11 +1,11 @@
 # ar-qr-tracer
 
-Trace physical QR codes in real life using AR
+Trace physical QR codes in real life using AR.
 
-- Draw kanji marker on any surface
+![Pattern marker](pattern-marker.png)
+
+- Draw marker on any surface (see image above)
 - Pick QR from Photos / Files
-- Scan kanji with camera
-- Pinch to size
+- Scan marker with camera
+- Pinch QR to size
 - Trace QR IRL
-
-https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/kanji.png
