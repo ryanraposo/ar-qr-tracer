@@ -3,235 +3,156 @@
 <head>
   <meta charset="UTF-8">
   <title>ar-qr-tracer</title>
-  <!-- Standard mobile meta tags -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   
-  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
   <script src="qr-generator.js"></script>
 
   <style>
-    body { margin: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body, html { margin: 0; padding: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: black; }
 
-    /* Instructions box */
-    #instructions {
+    #video-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+    video { width: 100%; height: 100%; object-fit: cover; }
+
+    #qr-overlay {
       position: absolute;
-      top: 20px;
+      top: 50%;
       left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.7);
-      color: #fff;
-      padding: 15px 25px;
-      border-radius: 15px;
-      z-index: 10;
-      text-align: center;
-      max-width: 85%;
-      line-height: 1.5;
-      font-size: 14px;
-      pointer-events: none;
-      backdrop-filter: blur(5px);
+      width: 200px;
+      height: 200px;
+      z-index: 2;
+      touch-action: none;
+      transform: translate(-50%, -50%);
+      cursor: move;
     }
+    #qr-image { width: 100%; height: 100%; object-fit: contain; }
 
     /* UI container */
     #ui-container {
       position: absolute;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%);
+      bottom: 0;
+      left: 0;
+      width: 100%;
       z-index: 10;
       display: flex;
       flex-direction: column;
       align-items: center;
-      width: 90%;
-      gap: 15px;
+      transition: transform 0.3s ease-in-out;
     }
 
-    .ui-row {
-      display: flex;
-      gap: 10px;
-      width: 100%;
-      justify-content: center;
-    }
-
-    #qrText {
-      flex: 1;
-      padding: 12px 20px;
-      border-radius: 25px;
-      border: none;
-      font-size: 16px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-      outline: none;
-      max-width: 300px;
-    }
-
-    #fileInput {
+    #ui-content {
       background: rgba(255,255,255,0.9);
-      padding: 8px 12px;
-      border-radius: 25px;
-      font-size: 14px;
-      border: none;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      padding: 20px;
+      width: 100%;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
     }
 
-    /* Hide the default file input text but keep it functional */
-    input[type="file"]::file-selector-button {
-      background: #007AFF;
-      color: white;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 15px;
-      margin-right: 8px;
-      cursor: pointer;
-    }
+    .ui-row { display: flex; gap: 10px; width: 100%; justify-content: center; align-items: center; }
+    #qrText { flex: 1; padding: 12px 20px; border-radius: 25px; border: 1px solid #ccc; font-size: 16px; outline: none; }
   </style>
 </head>
 <body>
-<div id="instructions">
-  1. Draw the square marker. <br>
-  2. Type text or upload a QR image. <br>
-  3. <b>Pinch to scale</b> from bottom-left.
+<div id="video-container">
+  <video id="camera-stream" autoplay playsinline muted></video>
+</div>
+
+<div id="qr-overlay">
+  <img id="qr-image" src="https://upload.wikimedia.org/wikipedia/commons/2/2f/QR_code_for_mobile_English_Wikipedia.png" alt="QR Code">
 </div>
 
 <div id="ui-container">
-  <div class="ui-row">
-    <input type="text" id="qrText" placeholder="Type text to generate QR..." maxlength="19">
-  </div>
-  <div class="ui-row">
-    <input type="file" id="fileInput" accept="image/*">
+  <div id="ui-content">
+    <div class="ui-row">
+      <input type="text" id="qrText" placeholder="Enter text (max 17 chars)..." maxlength="17">
+    </div>
+    <div class="ui-row">
+      <label>Opacity</label>
+      <input type="range" id="opacitySlider" min="0" max="1" step="0.1" value="0.5">
+    </div>
   </div>
 </div>
 
-<a-scene
-  embedded
-  vr-mode-ui="enabled: false"
-  arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false; smooth: true; smoothCount: 10; smoothTolerance: .01; smoothThreshold: 5;">
-
-  <a-assets>
-    <!-- Default QR texture -->
-    <img id="qrTexture" src="https://upload.wikimedia.org/wikipedia/commons/2/2f/QR_code_for_mobile_English_Wikipedia.png">
-  </a-assets>
-
-  <!-- Custom marker -->
-  <a-marker type="pattern" url="pattern-marker.patt" emitevents="true">
-    <!-- 
-      qrAnchor is the pivot point. 
-      It stays at the marker's center (0,0,0).
-      Rotation -90 0 0 makes it lie flat on the surface.
-    -->
-    <a-entity id="qrAnchor" rotation="-90 0 0" pinch-scale>
-      <!-- 
-        qrPlane is offset by (0.5, 0.5) so its bottom-left corner 
-        aligns with the qrAnchor's origin (0,0,0).
-      -->
-      <a-plane
-        id="qrPlane"
-        position="0.5 0.5 0"
-        width="1"
-        height="1"
-        material="src: #qrTexture; transparent: true; opacity: 0.5; side: double"
-      >
-      </a-plane>
-    </a-entity>
-  </a-marker>
-
-  <a-entity camera></a-entity>
-</a-scene>
-
 <script>
-/* Dynamic QR loader and Generator */
-const fileInput = document.getElementById('fileInput');
-const qrText = document.getElementById('qrText');
-const qrPlane = document.getElementById('qrPlane');
+  // Camera setup
+  const video = document.getElementById('camera-stream');
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then(stream => { video.srcObject = stream; })
+    .catch(err => { console.error("Camera access error:", err); });
 
-// Function to update the QR plane texture
-function updateQRTexture(src) {
-  qrPlane.setAttribute('material', `src: ${src}; transparent: true; opacity: 0.5; side: double;`);
-}
+  // QR Overlay elements
+  const qrOverlay = document.getElementById('qr-overlay');
+  const qrImage = document.getElementById('qr-image');
+  const qrText = document.getElementById('qrText');
+  const opacitySlider = document.getElementById('opacitySlider');
 
-// Handle Custom QR Generation
-qrText.addEventListener('input', (e) => {
-  const text = e.target.value;
-  if (!text) {
-    updateQRTexture('#qrTexture'); // Reset to default
-    return;
-  }
-  
-  try {
-    const canvas = QR.toCanvas(text, 20);
-    const dataURL = canvas.toDataURL();
-    updateQRTexture(`url(${dataURL})`);
-  } catch (err) {
-    console.error("QR Generation failed:", err);
-  }
-});
+  // Opacity
+  opacitySlider.addEventListener('input', (e) => {
+    qrImage.style.opacity = e.target.value;
+  });
+  qrImage.style.opacity = opacitySlider.value;
 
-// Handle File Uploads
-fileInput.addEventListener('change', (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const dataURL = e.target.result;
-    updateQRTexture(`url(${dataURL})`);
-  }
-  reader.readAsDataURL(file);
-});
-
-/* Pinch-to-scale component */
-AFRAME.registerComponent('pinch-scale', {
-  init: function() {
-    this.initialDistance = null;
-    this.initialScale = 1.0;
-    this.elScale = this.el.object3D.scale;
-
-    this.onTouchStart = this.onTouchStart.bind(this);
-    this.onTouchMove = this.onTouchMove.bind(this);
-    this.onTouchEnd = this.onTouchEnd.bind(this);
-
-    window.addEventListener('touchstart', this.onTouchStart, { passive: false });
-    window.addEventListener('touchmove', this.onTouchMove, { passive: false });
-    window.addEventListener('touchend', this.onTouchEnd);
-  },
-
-  getDistance: function(touches) {
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  },
-
-  onTouchStart: function(e) {
-    if (e.touches.length === 2) {
-      this.initialDistance = this.getDistance(e.touches);
-      this.initialScale = this.elScale.x;
-      // Prevent scrolling while pinching
-      e.preventDefault();
+  // QR Generation
+  qrText.addEventListener('input', (e) => {
+    const text = e.target.value;
+    if (!text) {
+      qrImage.src = 'https://upload.wikimedia.org/wikipedia/commons/2/2f/QR_code_for_mobile_English_Wikipedia.png';
+      return;
     }
-  },
+    try {
+      const canvas = QR.toCanvas(text, 20);
+      qrImage.src = canvas.toDataURL();
+    } catch (err) { console.error("QR Generation failed:", err); }
+  });
 
-  onTouchMove: function(e) {
-    if (e.touches.length === 2 && this.initialDistance) {
-      const currentDistance = this.getDistance(e.touches);
-      const scaleFactor = currentDistance / this.initialDistance;
-      const newScale = Math.max(0.1, this.initialScale * scaleFactor);
-      this.elScale.set(newScale, newScale, newScale);
-      e.preventDefault();
+  // Interaction: Drag and Pinch-to-scale
+  let isDragging = false;
+  let initialDistance = null;
+  let initialScale = 1.0;
+  let startX, startY;
+  let initialLeft, initialTop;
+
+  qrOverlay.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+      isDragging = true;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      const rect = qrOverlay.getBoundingClientRect();
+      initialLeft = rect.left + rect.width / 2;
+      initialTop = rect.top + rect.height / 2;
+    } else if (e.touches.length === 2) {
+      isDragging = false;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      initialDistance = Math.sqrt(dx * dx + dy * dy);
+      initialScale = parseFloat(getComputedStyle(qrOverlay).width) / 200;
     }
-  },
+  });
 
-  onTouchEnd: function(e) {
-    if (e.touches.length < 2) {
-      this.initialDistance = null;
+  qrOverlay.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (e.touches.length === 1 && isDragging) {
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      qrOverlay.style.left = (initialLeft + dx) + 'px';
+      qrOverlay.style.top = (initialTop + dy) + 'px';
+    } else if (e.touches.length === 2 && initialDistance) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const currentDistance = Math.sqrt(dx * dx + dy * dy);
+      const scale = initialScale * (currentDistance / initialDistance);
+      qrOverlay.style.width = (200 * scale) + 'px';
+      qrOverlay.style.height = (200 * scale) + 'px';
     }
-  },
+  }, { passive: false });
 
-  remove: function() {
-    window.removeEventListener('touchstart', this.onTouchStart);
-    window.removeEventListener('touchmove', this.onTouchMove);
-    window.removeEventListener('touchend', this.onTouchEnd);
-  }
-});
+  qrOverlay.addEventListener('touchend', () => {
+    isDragging = false;
+    initialDistance = null;
+  });
 </script>
 </body>
 </html>
