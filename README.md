@@ -4,7 +4,6 @@ Trace physical QR codes in real life using a camera overlay. Optimized for mobil
 
 ## Features
 - **Real-time QR Generation**: Type text directly in the app to generate a QR code instantly.
-- **Precision Anchoring**: The QR code anchors at its **bottom-left corner**, making it perfect for precise physical alignment.
 - **Mobile Optimized**: Smooth interface and pinch-to-scale gestures designed for Safari (iOS) and Chrome (Android).
 - **Standalone Mode**: No external libraries required for QR generation—runs entirely in your browser.
 
